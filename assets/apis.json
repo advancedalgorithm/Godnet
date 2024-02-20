@@ -1,0 +1,28 @@
+{
+    "API_NAME": {
+        "TOGGLE":           "enabled",
+        "URL":              "https://nigger.bob/api?host={HOST}&port={PORT}&time={TIME}&method={METHOD}",
+        "MAX_TIME":         "300",
+        "MAX_CONS":         "3",
+        "METHODS":          "UDP,LDAP",
+        // UDP:LDAP MEANS WHEN UDP IS USED IT WILL SEND LDAP
+        // USE A COMMA BETWEEN EACH FUNNELED METHOD
+        "FUNNELS":          "UDP:LDAP"
+    },
+    "2_API_NAME": {
+        "TOGGLE":           "enabled",
+        "URL":              "",
+        "MAX_TIME":         "",
+        "MAX_CONS":         "",
+        "METHODS":          "",
+        "FUNNELS":          "UDP:LDAP"
+    },
+    "3_API_NAME": {
+        "TOGGLE":           "enabled",
+        "URL":              "",
+        "MAX_TIME":         "",
+        "MAX_CONS":         "",
+        "METHODS":          "",
+        "FUNNELS":          "UDP:LDAP"
+    }
+}
