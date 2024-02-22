@@ -5,6 +5,7 @@ import time
 
 pub const (
 	success_sym 	= "\x1b[32m[ + ]\x1b[39m"
+	failed_sym		= "\x1b[31m[ X ]\x1b[39m"
 	/*
 	*	Colors
 	*/
@@ -51,6 +52,11 @@ pub const (
 	clear		 	= "\033[2J\033[1;1H"
 
 )
+
+pub fn set_title(mut client net.TcpConn, data string) 
+{
+	client.write_string("\033]0;${data}\007") or { 0 }
+}
 
 pub fn place_animated_text(mut client net.TcpConn, row int, col int, data string, delay int)
 {
@@ -118,4 +124,15 @@ pub fn unfill_bar(hashtags int) string
 	}
 
 	return "[${bar}]\r"
+}
+
+pub fn animate_listed_text(mut client net.TcpConn, data string, delay int) 
+{
+	lines := data.split("\n")
+
+	for line in lines 
+	{
+		client.write_string("${line}\r\n") or { 0 }
+		time.sleep(delay*time.millisecond)
+	}
 }

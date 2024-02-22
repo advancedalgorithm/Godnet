@@ -72,10 +72,11 @@ pub fn (mut u User) is_owner() bool
 
 pub fn (mut u User) authorize_attack(arr []string) bool
 {
-	u.host = h
-	u.port = p
-	u.time = t
-	u.method = m
+	u.host 		= arr[0]
+	u.port 		= arr[1]
+	u.time 		= arr[2]
+	u.method 	= arr[3]
+
 	/* 
 	* USER WILL ALWAYS HAVE OVER 0 IF PREMIUM
 	* EVEN IF USER HAS A CUSTOM PLAN 
@@ -86,7 +87,7 @@ pub fn (mut u User) authorize_attack(arr []string) bool
 
 	// VALIDATE IPV4 // HTTP input
 
-	if p.int() > 65535 || p.int() <= 0 { return false }
-	if t.int() > u.max_time || t.int() <= 0 { return false }
+	if u.port.int() > 65535 || u.port.int() <= 0 { return false }
+	if u.time.int() > u.max_time || u.time.int() <= 0 { return false }
 	return true
 }

@@ -10,5 +10,5 @@ pub struct Command
 
 pub fn new_cmd(s string) Command
 {
-	return Command{ data: s, args: s.split(","), cmd: s.split(",")[0] }
+	return Command{ data: s, args: s.split(" "), cmd: s.split(" ")[0] }
 }
