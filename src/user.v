@@ -46,6 +46,11 @@ pub fn create(new_username string, password string, ip string) User
 	}
 }
 
+// pub fn (mut u User) update_passwd(current string, new_p string) bool
+// {
+	
+// } 
+
 pub fn (mut u User) is_mod() bool
 {
 	if u.rank == 1 { return true }

