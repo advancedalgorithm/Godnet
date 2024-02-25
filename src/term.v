@@ -64,11 +64,23 @@ pub fn place_animated_text(mut client net.TcpConn, row int, col int, data string
 	animate_text(mut client, data, delay)
 }
 
-pub fn animate_text(mut client net.TcpConn, data string, delay int)
+pub fn animate_text(mut client net.TcpConn, data string, delay int, args ...string)
 {
+	if args.len > 0 {
+		client.write_string("${args[0]}") or { 0 }
+		client.write_string("${args[1]}") or { 0 }
+	}
+
 	for i in data {
 		client.write_string("${i.ascii_str()}") or { 0 }
 		time.sleep(delay*time.millisecond)
+	}
+
+	client.write_string("${c_default}") or { 0 }
+	client.write_string("${bg_default}") or { 0 }
+
+	if args.len > 2 {
+		client.write_string("${args[2]}") or { 0 }
 	}
 }
 

